@@ -1,6 +1,6 @@
 {
   "name": "react-native-usb-thermal-printer",
-  "version": "0.1.01",
+  "version": "1.0.01",
   "description": "React Native module to print on USB thermal printers",
   "source": "./src/index.tsx",
   "main": "./lib/commonjs/index.js",

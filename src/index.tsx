@@ -11,70 +11,61 @@ const LINKING_ERROR =
 // eslint-disable-next-line prettier/prettier
 const UsbThermalPrinter = NativeModules.UsbThermalPrinter ? NativeModules.UsbThermalPrinter : new Proxy({}, { get() { throw new Error(LINKING_ERROR); }, });
 
-// export function multiply(a: number, b: number): Promise<number> {
-//   return UsbThermalPrinter.multiply(a, b);
-// }
 
-export function init(): Promise<void> {
-  return UsbThermalPrinter.init();
-}
-
-export function getDeviceList(): Promise<IPrinter[]> {
+export function onPrintDeviceList(): Promise<IPrinter[]> {
   return UsbThermalPrinter.getDeviceList();
 }
 
-export function connect(vendorId: number, productId: number): Promise<string> {
-  return UsbThermalPrinter.connect(vendorId, productId);
-}
-
-export function onText(
+export function onPrintText(
+  id: number,
   text: string,
   opts: PrinterOptions = {}
 ): Promise<string> {
-  return UsbThermalPrinter.RawData(textTo64Buffer(text, opts));
+  return UsbThermalPrinter.RawData(textTo64Buffer(text, opts), id);
 }
 
-export function onBill(
-  text: string,
-  opts: PrinterOptions = {}
-): Promise<string> {
-  return UsbThermalPrinter.RawData(textTo64Buffer(text, opts));
-}
-
-export async function printImageURL(
+export async function onPrintImageURL(
+  id: number,
   imageUrl: string,
   opts: PrinterImageOptions = {}
 ): Promise<string> {
   const result = await UsbThermalPrinter.printImageURL(
     imageUrl,
     opts.imageWidth ?? 0,
-    opts.imageHeight ?? 0
+    opts.imageHeight ?? 0,
+    id
   );
 
   if (opts.cut) {
-    await UsbThermalPrinter.printCut(!!opts.tailingLine, !!opts.beep);
+    await UsbThermalPrinter.printCut(!!opts.tailingLine, !!opts.beep, id);
   }
 
   return result;
 }
 
-export async function printImageBase64(
+export async function onPrintImageBase64(
+  id: number,
   base64: string,
   opts: PrinterImageOptions = {}
 ): Promise<string> {
   const result = await UsbThermalPrinter.printImageBase64(
     base64,
     opts.imageWidth ?? 0,
-    opts.imageHeight ?? 0
+    opts.imageHeight ?? 0,
+    id
   );
 
   if (opts.cut) {
-    await UsbThermalPrinter.printCut(!!opts.tailingLine, !!opts.beep);
+    await UsbThermalPrinter.printCut(!!opts.tailingLine, !!opts.beep, id);
   }
 
   return result;
 }
 
-export async function printCut(line: boolean, beep: boolean): Promise<string> {
-  return UsbThermalPrinter.printCut(line, beep);
+export async function onPrintCut(
+  id: number,
+  line: boolean,
+  beep: boolean
+): Promise<string> {
+  return UsbThermalPrinter.printCut(line, beep, id);
 }

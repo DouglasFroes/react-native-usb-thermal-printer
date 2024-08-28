@@ -7,17 +7,19 @@ import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+
 import android.content.Intent;
 import android.content.IntentFilter;
+
 import android.hardware.usb.UsbConstants;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbEndpoint;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
+
 import android.util.Base64;
 import android.util.Log;
-import android.widget.Toast;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 
@@ -33,23 +35,22 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
-
-
 public class USBPrinterAdapter implements PrinterAdapter {
-    @SuppressLint("StaticFieldLeak")
-    private static USBPrinterAdapter mInstance;
+    private final String LOG_TAG = "USBPrinterDSF";
 
-
-    private final String LOG_TAG = "RNUSBPrinter";
-    private Context mContext;
-    private UsbManager mUSBManager;
-    private PendingIntent mPermissionIndent;
-    private UsbDevice mUsbDevice;
-    private UsbDeviceConnection mUsbDeviceConnection;
-    private UsbInterface mUsbInterface;
-    private UsbEndpoint mEndPoint;
     private static final String ACTION_USB_PERMISSION = "com.usbprinter.USB_PERMISSION";
-    private static final String EVENT_USB_DEVICE_ATTACHED = "usbAttached";
+
+    private PendingIntent mPermissionIntent;
+    private UsbManager mUSBManager;
+
+    private Context mContext;
+    private int productID;
+
+    private UsbDevice mUsbDevice;
+    private UsbInterface mUsbInterface;
+    private UsbDeviceConnection mUsbDeviceConnection;
+    private UsbEndpoint usbEndpointOut = null;
+    private UsbEndpoint usbEndpointIn = null;
 
     private final static char ESC_CHAR = 0x1B;
     private static final byte[] SELECT_BIT_IMAGE_MODE = {0x1B, 0x2A, 33};
@@ -58,88 +59,45 @@ public class USBPrinterAdapter implements PrinterAdapter {
     private final static byte[] LINE_FEED = new byte[]{0x0A};
     private static final byte[] CENTER_ALIGN = {0x1B, 0X61, 0X31};
 
-    private USBPrinterAdapter() {
-    }
+    @Override
+    public void init(int productID, ReactApplicationContext ctx) {
+        this.productID = productID;
+        this.mContext = ctx;
 
-    public static USBPrinterAdapter getInstance() {
-        if (mInstance == null) {
-            mInstance = new USBPrinterAdapter();
-        }
-        return mInstance;
+        this.mUSBManager = (UsbManager) this.mContext.getSystemService(Context.USB_SERVICE);
+        this.mPermissionIntent = PendingIntent.getBroadcast(
+                this.mContext,
+                0,
+                new Intent(ACTION_USB_PERMISSION),
+                // android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S ?
+                 PendingIntent.FLAG_MUTABLE
+        );
+
+        IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+        this.mContext.registerReceiver(mUsbDeviceReceiver, filter);
     }
 
     private final BroadcastReceiver mUsbDeviceReceiver = new BroadcastReceiver() {
-        @Override
+
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
+            Log.i(LOG_TAG, "action: " + action);
+
             if (ACTION_USB_PERMISSION.equals(action)) {
                 synchronized (this) {
                     UsbDevice usbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
                     if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                        assert usbDevice != null;
-                        Log.i(LOG_TAG, "success to grant permission for device " + usbDevice.getDeviceId() + ", vendor_id: " + usbDevice.getVendorId() + " product_id: " + usbDevice.getProductId());
-                        mUsbDevice = usbDevice;
+                       sendEvent("USB permission granted");
                     } else {
-                        assert usbDevice != null;
-                        Toast.makeText(context, "User refuses to obtain USB device permissions" + usbDevice.getDeviceName(), Toast.LENGTH_LONG).show();
-                    }
-                }
-            } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
-                if (mUsbDevice != null) {
-                    Toast.makeText(context, "USB device has been turned off", Toast.LENGTH_LONG).show();
-                    closeConnectionIfExists();
-                }
-            } else if (UsbManager.ACTION_USB_ACCESSORY_ATTACHED.equals(action) || UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
-                synchronized (this) {
-                    if (mContext != null) {
-                        ((ReactApplicationContext) mContext).getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-                                .emit(EVENT_USB_DEVICE_ATTACHED, null);
+                        sendEvent("USB permission denied");
                     }
                 }
             }
         }
     };
 
-    @SuppressLint("UnspecifiedImmutableFlag")
-    public void init(ReactApplicationContext reactContext) {
-        this.mContext = reactContext;
-        this.mUSBManager = (UsbManager) this.mContext.getSystemService(Context.USB_SERVICE);
-
-        this.mPermissionIndent = PendingIntent.getBroadcast(
-                this.mContext,
-                0,
-                new Intent(ACTION_USB_PERMISSION),
-                PendingIntent.FLAG_MUTABLE | 0
-        );
-
-        IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
-
-        this.mContext.registerReceiver(mUsbDeviceReceiver, filter);
-        IntentFilter filter2 = new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED);
-
-        this.mContext.registerReceiver(mUsbDeviceReceiver, filter2);
-        IntentFilter filter3 = new IntentFilter(UsbManager.ACTION_USB_ACCESSORY_ATTACHED);
-
-        this.mContext.registerReceiver(mUsbDeviceReceiver, filter3);
-        IntentFilter filter4 = new IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED);
-
-        this.mContext.registerReceiver(mUsbDeviceReceiver, filter4);
-
-        Log.i(LOG_TAG, "USB Printer Adapter initialized");
-    }
-
-
-    public void closeConnectionIfExists() {
-        if (mUsbDeviceConnection != null) {
-            mUsbDeviceConnection.releaseInterface(mUsbInterface);
-            mUsbDeviceConnection.close();
-            mUsbInterface = null;
-            mEndPoint = null;
-            mUsbDeviceConnection = null;
-        }
-    }
-
-    public List<PrinterDevice> getDeviceList() {
+    @Override
+    public List<PrinterDevice> getDeviceList() throws IOException{
         List<PrinterDevice> lists = new ArrayList<>();
         if (mUSBManager == null) {
             this.sendEvent("USBManager is not initialized while get device list");
@@ -153,121 +111,82 @@ public class USBPrinterAdapter implements PrinterAdapter {
     }
 
     @Override
-    public String selectDevice(PrinterDeviceId printerDeviceId) {
-        if (printerDeviceId == null) {
-            return "failed to select device, device id is null";
-        }
-        if (mUSBManager == null) {
-            return "failed to select device, USBManager is not initialized";
-        }
+    public void open() throws IOException {
+      Boolean connect = false;
 
+      try {
+            for (UsbDevice device : mUSBManager.getDeviceList().values()) {
+                if (device.getProductId() == this.productID) {
+                    mUsbDevice = device;
+                    mUSBManager.requestPermission(mUsbDevice, mPermissionIntent);
+                    mUsbDeviceConnection = mUSBManager.openDevice(mUsbDevice);
+                    UsbInterface mUsbInterface = findHidInterface();
 
-        USBPrinterDeviceId usbPrinterDeviceId = (USBPrinterDeviceId) printerDeviceId;
+                    mUsbDeviceConnection.claimInterface(mUsbInterface, true);
 
-        closeConnectionIfExists();
+                    Log.w(LOG_TAG,  String.valueOf(mUsbInterface.getEndpointCount()));
 
-        if (mUSBManager.getDeviceList().size() == 0) {
-            return "No device found";
-        }
+                    for (int i = 0; i < mUsbInterface.getEndpointCount(); i++) {
+                        UsbEndpoint usbEndpoint = mUsbInterface.getEndpoint(i);
+                        Log.w(LOG_TAG, String.valueOf(usbEndpoint.getType()));
+                        Log.w(LOG_TAG, String.valueOf(usbEndpoint.getDirection()));
+                        Log.w(LOG_TAG, String.valueOf(usbEndpoint.getType()));
 
-        boolean deviceFound = false;
+                        if (usbEndpoint.getType() == UsbConstants.USB_CLASS_COMM) {
+                            if (usbEndpoint.getDirection() == UsbConstants.USB_DIR_OUT) {
+                                usbEndpointOut = usbEndpoint;
+                                connect = true;
 
-        for (UsbDevice usbDevice : mUSBManager.getDeviceList().values()) {
-            if (
-              usbDevice.getVendorId() == usbPrinterDeviceId.getVendorId() &&
-              usbDevice.getProductId() == usbPrinterDeviceId.getProductId()
-              ) {
-                mUSBManager.requestPermission(usbDevice, mPermissionIndent);
-                deviceFound = true;
+                            } else {
+                                usbEndpointIn = usbEndpoint;
+                            }
+                        }
+                    }
+
+                    mUSBManager.requestPermission(mUsbDevice, mPermissionIntent);  // Valida a permissão de impressão na Intent
+
+                    break;
+                }
             }
-        }
 
-        if (!deviceFound) {
-            return "failed to find device with vendor_id: " + usbPrinterDeviceId.getVendorId() + " product_id: " + usbPrinterDeviceId.getProductId();
-        }
-
-        return "success to select device with vendor_id: " + usbPrinterDeviceId.getVendorId() + " product_id: " + usbPrinterDeviceId.getProductId();
+            if(!connect){
+                throw new Exception("Não foi possível se conectar com a impressora!");
+            }
+      } catch (Exception e) {
+          e.printStackTrace();
+          throw new IOException(e);
+      }
    }
 
+   @Override
+    public void close() throws IOException {
+        mUsbDeviceConnection.close();
+    }
 
-    private boolean openConnection() {
-        if (mUsbDevice == null) {
-            return false;
-        }
+    @Override
+    public void printRawData(String rawData, Promise promise)  throws IOException  {
+        Log.w(LOG_TAG, "start to print raw data");
+        try{
+          byte[] command = Base64.decode(rawData, Base64.DEFAULT);
+          int b = mUsbDeviceConnection.bulkTransfer(usbEndpointOut, command, 0, command.length, 1000);
 
-        if (mUsbDeviceConnection != null) {
-          return true;
-        }
-
-        UsbInterface usbInterface = null;
-        UsbEndpoint endPoint = null;
-
-        for (int i = 0; i < mUsbDevice.getInterfaceCount(); i++) {
-            UsbInterface tempInterface = mUsbDevice.getInterface(i);
-            if (tempInterface.getInterfaceClass() == UsbConstants.USB_CLASS_PRINTER) {
-                usbInterface = tempInterface;
-                break;
-            }
-        }
-
-        if (usbInterface == null) {
-            return false;
-        }
-
-        for (int i = 0; i < usbInterface.getEndpointCount(); i++) {
-            UsbEndpoint tempEndPoint = usbInterface.getEndpoint(i);
-            if (tempEndPoint.getType() == UsbConstants.USB_ENDPOINT_XFER_BULK) {
-                endPoint = tempEndPoint;
-                break;
-            }
-        }
-
-        if (endPoint == null) {
-            return false;
-        }
-
-        UsbDeviceConnection connection = mUSBManager.openDevice(mUsbDevice);
-        if (connection == null) {
-            return false;
-        }
-
-        if (connection.claimInterface(usbInterface, true)) {
-            mUsbDeviceConnection = connection;
-            mUsbInterface = usbInterface;
-            mEndPoint = endPoint;
-            return true;
-        } else {
-            connection.close();
-            return false;
+          if (b < 0) {
+              String msg = "failed to print raw data - " + b;
+              Log.v(LOG_TAG, msg);
+              promise.reject(msg);
+              sendEvent(msg);
+          } else {
+              promise.resolve("success to print raw data - " + b);
+          }
+        } catch (Exception e) {
+          e.printStackTrace();
+          sendEvent(e.getMessage());
+          promise.reject(e.getMessage());
+         throw new IOException(e);
         }
     }
 
-
-    public void printRawData(String rawData, Promise promise) {
-        Log.v(LOG_TAG, "start to print raw data " + rawData);
-
-        boolean isConnected = openConnection();
-
-        if (isConnected) {
-            byte[] bytes = Base64.decode(rawData, Base64.DEFAULT);
-            int b = mUsbDeviceConnection.bulkTransfer(mEndPoint, bytes, bytes.length, 0);
-
-            if (b < 0) {
-                String msg = "failed to print raw data";
-                Log.v(LOG_TAG, msg);
-                promise.reject(msg);
-            } else {
-                promise.resolve("success to print raw data");
-            }
-        } else {
-            String msg = "failed to connected to device";
-            Log.v(LOG_TAG, msg);
-            promise.reject(msg);
-            sendEvent(msg);
-        }
-    }
-
-    public static Bitmap getBitmapFromURL(String src) {
+    public static Bitmap getBitmapFromURL(String src) throws IOException  {
         try {
             URL url = new URL(src);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -287,7 +206,8 @@ public class USBPrinterAdapter implements PrinterAdapter {
     }
 
     @Override
-    public void printImageData(final String imageUrl, int imageWidth, int imageHeight, Promise promise) {
+    public void printImageData(final String imageUrl, int imageWidth, int imageHeight, Promise promise)  throws IOException {
+      try{
         final Bitmap bitmapImage = getBitmapFromURL(imageUrl);
 
         if (bitmapImage == null) {
@@ -295,85 +215,78 @@ public class USBPrinterAdapter implements PrinterAdapter {
             return;
         }
 
-        Log.v(LOG_TAG, "start to print image data " + bitmapImage);
-        boolean isConnected = openConnection();
+        Log.w(LOG_TAG, "start to print image data");
 
-        if (isConnected) {
-            Log.v(LOG_TAG, "Connected to device");
-            int[][] pixels = getPixelsSlow(bitmapImage, imageWidth, imageHeight);
+        int[][] pixels = getPixelsSlow(bitmapImage, imageWidth, imageHeight);
 
-            mUsbDeviceConnection.bulkTransfer(mEndPoint, SET_LINE_SPACE_24, SET_LINE_SPACE_24.length, 0);
-            mUsbDeviceConnection.bulkTransfer(mEndPoint, CENTER_ALIGN, CENTER_ALIGN.length, 0);
+        mUsbDeviceConnection.bulkTransfer(usbEndpointOut, SET_LINE_SPACE_24, 0, SET_LINE_SPACE_24.length, 1000);
+        mUsbDeviceConnection.bulkTransfer(usbEndpointOut, CENTER_ALIGN, 0, CENTER_ALIGN.length, 1000);
 
-            for (int y = 0; y < pixels.length; y += 24) {
-                mUsbDeviceConnection.bulkTransfer(mEndPoint, SELECT_BIT_IMAGE_MODE, SELECT_BIT_IMAGE_MODE.length, 0);
+        for (int y = 0; y < pixels.length; y += 24) {
+            mUsbDeviceConnection.bulkTransfer(usbEndpointOut, SELECT_BIT_IMAGE_MODE, 0, SELECT_BIT_IMAGE_MODE.length, 1000);
 
-                byte[] row = new byte[]{(byte) (0x00ff & pixels[y].length)
-                        , (byte) ((0xff00 & pixels[y].length) >> 8)};
+            byte[] row = new byte[]{(byte) (0x00ff & pixels[y].length)
+                    , (byte) ((0xff00 & pixels[y].length) >> 8)};
 
-                mUsbDeviceConnection.bulkTransfer(mEndPoint, row, row.length, 0);
+            mUsbDeviceConnection.bulkTransfer(usbEndpointOut, row, 0, row.length, 1000);
 
-                for (int x = 0; x < pixels[y].length; x++) {
-                    byte[] slice = recollectSlice(y, x, pixels);
-                    mUsbDeviceConnection.bulkTransfer(mEndPoint, slice, slice.length, 0);
-                }
-
-                mUsbDeviceConnection.bulkTransfer(mEndPoint, LINE_FEED, LINE_FEED.length, 0);
+            for (int x = 0; x < pixels[y].length; x++) {
+                byte[] slice = recollectSlice(y, x, pixels);
+                mUsbDeviceConnection.bulkTransfer(usbEndpointOut, slice, 0, slice.length, 1000);
             }
 
-            mUsbDeviceConnection.bulkTransfer(mEndPoint, SET_LINE_SPACE_32, SET_LINE_SPACE_32.length, 0);
-            int b = mUsbDeviceConnection.bulkTransfer(mEndPoint, LINE_FEED, LINE_FEED.length, 0);
-
-            if (b < 0) {
-                String msg = "failed to print image data";
-                Log.v(LOG_TAG, msg);
-                promise.reject(msg);
-            } else {
-                promise.resolve("success to print image data");
-            }
-        } else {
-            String msg = "failed to connected to device";
-            Log.v(LOG_TAG, msg);
-            this.sendEvent(msg);
-            promise.reject(msg);
+            mUsbDeviceConnection.bulkTransfer(usbEndpointOut, LINE_FEED, 0, LINE_FEED.length, 1000);
         }
+
+        mUsbDeviceConnection.bulkTransfer(usbEndpointOut, SET_LINE_SPACE_32, 0, SET_LINE_SPACE_32.length, 1000);
+        int b = mUsbDeviceConnection.bulkTransfer(usbEndpointOut, LINE_FEED, 0, LINE_FEED.length, 1000);
+
+        if (b < 0) {
+            String msg = "failed to print image data";
+            Log.w(LOG_TAG, msg);
+            promise.reject(msg);
+        } else {
+            promise.resolve("success to print image data");
+        }
+      } catch (Exception e) {
+        e.printStackTrace();
+        sendEvent(e.getMessage());
+        promise.reject(e.getMessage());
+       throw new IOException(e);
+      }
     }
 
     @Override
-    public void printImageBase64(final Bitmap bitmapImage, int imageWidth, int imageHeight, Promise promise) {
+    public void printImageBase64(final Bitmap bitmapImage, int imageWidth, int imageHeight, Promise promise) throws IOException {
         if (bitmapImage == null) {
             promise.reject("image not found");
             return;
         }
-
-        Log.v(LOG_TAG, "start to print image data " + bitmapImage);
-        boolean isConnected = openConnection();
-
-        if (isConnected) {
+        try {
             Log.v(LOG_TAG, "Connected to device");
             int[][] pixels = getPixelsSlow(bitmapImage, imageWidth, imageHeight);
 
-            mUsbDeviceConnection.bulkTransfer(mEndPoint, SET_LINE_SPACE_24, SET_LINE_SPACE_24.length, 0);
-            mUsbDeviceConnection.bulkTransfer(mEndPoint, CENTER_ALIGN, CENTER_ALIGN.length, 0);
+            mUsbDeviceConnection.bulkTransfer(usbEndpointOut, SET_LINE_SPACE_24, 0, SET_LINE_SPACE_24.length, 1000);
+            mUsbDeviceConnection.bulkTransfer(usbEndpointOut, CENTER_ALIGN, 0, CENTER_ALIGN.length, 1000);
 
             for (int y = 0; y < pixels.length; y += 24) {
-                mUsbDeviceConnection.bulkTransfer(mEndPoint, SELECT_BIT_IMAGE_MODE, SELECT_BIT_IMAGE_MODE.length, 0);
+                mUsbDeviceConnection.bulkTransfer(usbEndpointOut, SELECT_BIT_IMAGE_MODE, 0, SELECT_BIT_IMAGE_MODE.length, 1000);
 
                 byte[] row = new byte[]{(byte) (0x00ff & pixels[y].length)
                         , (byte) ((0xff00 & pixels[y].length) >> 8)};
 
-                mUsbDeviceConnection.bulkTransfer(mEndPoint, row, row.length, 0);
+                mUsbDeviceConnection.bulkTransfer(usbEndpointOut, row, 0, row.length, 1000);
 
                 for (int x = 0; x < pixels[y].length; x++) {
                     byte[] slice = recollectSlice(y, x, pixels);
-                    mUsbDeviceConnection.bulkTransfer(mEndPoint, slice, slice.length, 0);
+                    mUsbDeviceConnection.bulkTransfer(usbEndpointOut, slice, 0, slice.length, 1000);
                 }
 
-                mUsbDeviceConnection.bulkTransfer(mEndPoint, LINE_FEED, LINE_FEED.length, 0);
+                mUsbDeviceConnection.bulkTransfer(usbEndpointOut, LINE_FEED, 0, LINE_FEED.length, 1000);
             }
 
-            mUsbDeviceConnection.bulkTransfer(mEndPoint, SET_LINE_SPACE_32, SET_LINE_SPACE_32.length, 0);
-            int b = mUsbDeviceConnection.bulkTransfer(mEndPoint, LINE_FEED, LINE_FEED.length, 0);
+            mUsbDeviceConnection.bulkTransfer(usbEndpointOut, SET_LINE_SPACE_32, 0, SET_LINE_SPACE_32.length, 1000);
+            int b = mUsbDeviceConnection.bulkTransfer(usbEndpointOut, LINE_FEED, 0, LINE_FEED.length, 1000);
 
             if (b < 0) {
                 String msg = "failed to print image data";
@@ -382,28 +295,30 @@ public class USBPrinterAdapter implements PrinterAdapter {
             } else {
                 promise.resolve("success to print image data");
             }
-        } else {
-            String msg = "failed to connected to device";
-            Log.v(LOG_TAG, msg);
-            this.sendEvent(msg);
-            promise.reject(msg);
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendEvent(e.getMessage());
+            promise.reject(e.getMessage());
+           throw new IOException(e);
         }
     }
 
-    public void printCut(boolean tailingLine, boolean beep, Promise promise) {
-        boolean isConnected = openConnection();
-
-        if (isConnected) {
-            byte[] bytes = new byte[]{0x1D, 0x56, 0x42, 0x00};
+    @Override
+    public void printCut(boolean tailingLine, boolean beep, Promise promise)  throws IOException{
+        try {
 
             if (tailingLine) {
-                bytes[3] = 0x01;
-            }
-            if (beep) {
-                bytes[3] = 0x03;
+              byte[] cmd = new byte[]{0x1b,0x33,24};
+              int b = mUsbDeviceConnection.bulkTransfer(usbEndpointOut, cmd, 0, cmd.length, 1000);
             }
 
-            int b = mUsbDeviceConnection.bulkTransfer(mEndPoint, bytes, bytes.length, 0);
+            byte[] command = new byte[]{0x1D, 0x56, 0x00};
+            int b = mUsbDeviceConnection.bulkTransfer(usbEndpointOut, command, 0, command.length, 1000);
+
+            if (beep) {
+              byte[] cmd = new byte[]{0x1b,0x42,0x05,0x09};
+              mUsbDeviceConnection.bulkTransfer(usbEndpointOut, cmd, 0, cmd.length, 1000);
+            }
 
             if (b < 0) {
                 String msg = "failed to print raw data";
@@ -412,11 +327,11 @@ public class USBPrinterAdapter implements PrinterAdapter {
             } else {
                 promise.resolve("success to print raw data");
             }
-        } else {
-            String msg = "failed to connected to device";
-            Log.v(LOG_TAG, msg);
-            sendEvent(msg);
-            promise.reject(msg);
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendEvent(e.getMessage());
+            promise.reject(e.getMessage());
+           throw new IOException(e);
         }
     }
 
@@ -426,5 +341,18 @@ public class USBPrinterAdapter implements PrinterAdapter {
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
             .emit("com.usbprinter", msg);
       }
+    }
+
+    private UsbInterface findHidInterface() {
+        if (mUsbDevice != null) {
+            final int interfaceCount = mUsbDevice.getInterfaceCount();
+
+            for (int interfaceIndex = 0; interfaceIndex < interfaceCount; interfaceIndex++) {
+                UsbInterface usbInterface = mUsbDevice.getInterface(interfaceIndex);
+                return usbInterface;
+            }
+            Log.w(LOG_TAG, "HID interface not found.");
+        }
+        return null;
     }
 }

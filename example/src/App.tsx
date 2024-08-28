@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,14 +7,11 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import {
-  connect,
-  getDeviceList,
-  init,
-  onBill,
-  onText,
-  printCut,
-  printImageBase64,
-  printImageURL,
+  onPrintCut,
+  onPrintDeviceList,
+  onPrintImageBase64,
+  onPrintImageURL,
+  onPrintText,
 } from 'react-native-usb-thermal-printer';
 
 import { height, width } from './dimensions';
@@ -40,29 +37,21 @@ export default function App() {
   const [text, setText] = useState('');
   const [printerList, setPrinterList] = useState<IPrinter[]>([]);
   const [printer, setPrinter] = useState<IPrinter>();
-
-  useEffect(() => {
-    init();
-  }, []);
+  const [printerId, setPrinterId] = useState<number>();
 
   async function get() {
-    const deviceList = await getDeviceList();
+    const deviceList = await onPrintDeviceList();
     setPrinterList(deviceList);
     setText('Device List, total: ' + deviceList.length);
   }
 
-  async function connectPrinter() {
-    if (printer) {
-      const { vendor_id, product_id } = printer;
-      const response = await connect(Number(vendor_id), Number(product_id));
-      setText(response);
-    } else {
-      setText('Select a printer first');
-    }
-  }
-
   async function printText() {
-    const aa = await onText(textPrint, {
+    if (!printerId) {
+      setText('Select Printer');
+      return;
+    }
+
+    const aa = await onPrintText(printerId, textPrint, {
       encoding: 'CP860',
       beep: true,
       cut: true,
@@ -73,15 +62,27 @@ export default function App() {
   }
 
   async function printBill() {
-    const aa = await onBill('\n Hello World \n', { beep: true });
+    if (!printerId) {
+      setText('Select Printer');
+      return;
+    }
+
+    const aa = await onPrintText(printerId, '\n Hello World \n', {
+      beep: true,
+    });
 
     setText(aa);
   }
 
   async function printImage() {
+    if (!printerId) {
+      setText('Select Printer');
+      return;
+    }
+
     const img = 'https://avatars.githubusercontent.com/u/123817130';
 
-    const result = await printImageURL(img, {
+    const result = await onPrintImageURL(printerId, img, {
       imageWidth: 150,
       imageHeight: 150,
       beep: true,
@@ -93,7 +94,12 @@ export default function App() {
   }
 
   async function printImage64() {
-    const result = await printImageBase64(img64, {
+    if (!printerId) {
+      setText('Select Printer');
+      return;
+    }
+
+    const result = await onPrintImageBase64(printerId, img64, {
       imageWidth: 150,
       imageHeight: 150,
       beep: true,
@@ -103,22 +109,21 @@ export default function App() {
     setText(result);
   }
 
-  async function onPrintCut() {
-    const result = await printCut(true, true);
+  async function printCut() {
+    if (!printerId) {
+      setText('Select Printer');
+      return;
+    }
+
+    const result = await onPrintCut(printerId, true, true);
     setText(result);
   }
 
   return (
     <ScrollView>
       <View style={styles.container}>
-        <TouchableOpacity onPress={() => init()} style={styles.bt}>
-          <Text>Init</Text>
-        </TouchableOpacity>
         <TouchableOpacity onPress={get} style={styles.bt}>
           <Text>Get Device List</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={connectPrinter} style={styles.bt}>
-          <Text>Connect Printer</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={printText} style={styles.bt}>
           <Text>Print Text</Text>
@@ -132,7 +137,7 @@ export default function App() {
         <TouchableOpacity onPress={printImage64} style={styles.bt}>
           <Text>Print Image 64</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={onPrintCut} style={styles.bt}>
+        <TouchableOpacity onPress={printCut} style={styles.bt}>
           <Text>Print Cut</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setText('')} style={styles.bt}>
@@ -144,7 +149,10 @@ export default function App() {
           {printerList.map((i, index) => (
             <TouchableOpacity
               key={index}
-              onPress={() => setPrinter(i)}
+              onPress={() => {
+                setPrinter(i);
+                setPrinterId(Number(i.product_id));
+              }}
               style={
                 printer?.device_id === i.device_id
                   ? styles.btPrintSelected

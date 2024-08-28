@@ -11,11 +11,12 @@ import com.usbthermalprinter.adapter.PrinterAdapter
 import com.usbthermalprinter.adapter.USBPrinterAdapter
 import com.usbthermalprinter.adapter.USBPrinterDeviceId
 
+// import java.lang.Exception
+
 class UsbThermalPrinterModule(reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 
   private val context = reactContext
-  private var adapter: PrinterAdapter? = null
 
   override fun getName(): String {
     return NAME
@@ -25,59 +26,84 @@ class UsbThermalPrinterModule(reactContext: ReactApplicationContext) :
     const val NAME = "UsbThermalPrinter"
   }
 
-  // @ReactMethod
-  // fun multiply(a: Double, b: Double, promise: Promise) {
-  //   promise.resolve(a * b)
-  // }
-
-  @ReactMethod
-  fun init() {
-      adapter = USBPrinterAdapter.getInstance();
-      adapter?.init(context)
-  }
-
   @ReactMethod
   fun getDeviceList(promise: Promise) {
-    val printerDevices = adapter?.getDeviceList()
-    val pairedDeviceList:WritableArray = Arguments.createArray()
+    try{
+        val adapter: PrinterAdapter = USBPrinterAdapter()
+        val pairedDeviceList:WritableArray = Arguments.createArray()
 
-    if (printerDevices?.size!! > 0) {
-      for (printerDevice in printerDevices) {
-        pairedDeviceList.pushMap(printerDevice.toRNWritableMap())
-      }
+        val printerDevices = adapter.getDeviceList()
+
+        if (printerDevices?.size!! > 0) {
+          for (printerDevice in printerDevices) {
+            pairedDeviceList.pushMap(printerDevice.toRNWritableMap())
+          }
+        }
+
+        promise.resolve(pairedDeviceList)
+    } catch (e: Exception) {
+        promise.reject(e.message)
     }
-
-    promise.resolve(pairedDeviceList)
   }
 
   @ReactMethod
-  fun connect(vendorId: Double, productId: Double, promise: Promise) {
-    val result= adapter?.selectDevice(
-        USBPrinterDeviceId.valueOf(vendorId.toInt(), productId.toInt())
-      )
+  fun RawData(base64Data: String, id: Double,  promise: Promise) {
+    // adapter?.printRawData(base64Data, promise)
+    try {
+       val adapter: PrinterAdapter = USBPrinterAdapter()
+       adapter.init(id.toInt(), context)
 
-    promise.resolve(result ?: "No device found")
+        adapter.open()
+        adapter.printRawData(base64Data, promise)
+        adapter.close()
+    } catch (e: Exception) {
+      promise.reject(e)
+    }
   }
 
   @ReactMethod
-  fun RawData(base64Data: String, promise: Promise) {
-    adapter?.printRawData(base64Data, promise)
+  fun printImageURL(imageUrl: String, imageWidth: Double, imageHeight: Double, id:Double, promise: Promise) {
+    // adapter?.printImageData(imageUrl, imageWidth.toInt(), imageHeight.toInt(), promise)
+    try {
+      val adapter: PrinterAdapter = USBPrinterAdapter()
+      adapter.init(id.toInt(), context)
+
+      adapter.open()
+      adapter.printImageData(imageUrl, imageWidth.toInt(), imageHeight.toInt(), promise)
+      adapter.close()
+    } catch (e: Exception) {
+      promise.reject(e)
+    }
   }
 
   @ReactMethod
-  fun printImageURL(imageUrl: String, imageWidth: Double, imageHeight: Double, promise: Promise) {
-    adapter?.printImageData(imageUrl, imageWidth.toInt(), imageHeight.toInt(), promise)
+  fun printImageBase64(base64: String, imageWidth: Double, imageHeight: Double, id:Double, promise: Promise) {
+    try {
+      val adapter: PrinterAdapter = USBPrinterAdapter()
+      adapter.init(id.toInt(), context)
+
+      val decodedString = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+      val decodedByte = android.graphics.BitmapFactory.decodeByteArray(decodedString, 0, decodedString.size)
+
+      adapter.open()
+      adapter.printImageBase64(decodedByte, imageWidth.toInt(), imageHeight.toInt(), promise)
+      adapter.close()
+    } catch (e: Exception) {
+      promise.reject(e)
+    }
   }
 
   @ReactMethod
-  fun printImageBase64(base64: String, imageWidth: Double, imageHeight: Double, promise: Promise) {
-    val decodedString = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
-    val decodedByte = android.graphics.BitmapFactory.decodeByteArray(decodedString, 0, decodedString.size)
-    adapter?.printImageBase64(decodedByte, imageWidth.toInt(), imageHeight.toInt(), promise)
-  }
+  fun printCut(tailingLine: Boolean, beep: Boolean, id:Double, promise: Promise) {
+    try {
+      val adapter: PrinterAdapter = USBPrinterAdapter()
+      adapter.init(id.toInt(), context)
 
-  @ReactMethod
-  fun printCut(tailingLine: Boolean, beep: Boolean, promise: Promise) {
-    adapter?.printCut(tailingLine, beep, promise)
+      adapter.open()
+      adapter.printCut(tailingLine, beep, promise)
+      adapter.close()
+    } catch (e: Exception) {
+      promise.reject(e)
+    }
   }
 }
