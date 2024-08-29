@@ -69,8 +69,7 @@ public class USBPrinterAdapter implements PrinterAdapter {
                 this.mContext,
                 0,
                 new Intent(ACTION_USB_PERMISSION),
-                // android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S ?
-                 PendingIntent.FLAG_MUTABLE
+                android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0
         );
 
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
@@ -78,7 +77,6 @@ public class USBPrinterAdapter implements PrinterAdapter {
     }
 
     private final BroadcastReceiver mUsbDeviceReceiver = new BroadcastReceiver() {
-
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
             Log.i(LOG_TAG, "action: " + action);
@@ -99,19 +97,22 @@ public class USBPrinterAdapter implements PrinterAdapter {
     @Override
     public List<PrinterDevice> getDeviceList() throws IOException{
         List<PrinterDevice> lists = new ArrayList<>();
-        if (mUSBManager == null) {
-            this.sendEvent("USBManager is not initialized while get device list");
-            return lists;
-        }
+        // if (mUSBManager == null) {
+        //     this.sendEvent("USBManager is not initialized while get device list");
+        //     return lists;
+        // }
+        ReactApplicationContext ctx = (ReactApplicationContext) mContext;
 
-        for (UsbDevice usbDevice : mUSBManager.getDeviceList().values()) {
+          UsbManager manager = (UsbManager) ctx.getSystemService(Context.USB_SERVICE);
+
+        for (UsbDevice usbDevice : manager.getDeviceList().values()) {
             lists.add(new USBPrinterDevice(usbDevice));
         }
         return lists;
     }
 
     @Override
-    public void open() throws IOException {
+    public Boolean open() throws IOException {
       Boolean connect = false;
 
       try {
@@ -136,7 +137,6 @@ public class USBPrinterAdapter implements PrinterAdapter {
                             if (usbEndpoint.getDirection() == UsbConstants.USB_DIR_OUT) {
                                 usbEndpointOut = usbEndpoint;
                                 connect = true;
-
                             } else {
                                 usbEndpointIn = usbEndpoint;
                             }
@@ -149,18 +149,27 @@ public class USBPrinterAdapter implements PrinterAdapter {
                 }
             }
 
-            if(!connect){
-                throw new Exception("Não foi possível se conectar com a impressora!");
-            }
+            return connect;
       } catch (Exception e) {
           e.printStackTrace();
           throw new IOException(e);
       }
    }
 
-   @Override
+    @Override
     public void close() throws IOException {
         mUsbDeviceConnection.close();
+        mContext.unregisterReceiver(mUsbDeviceReceiver);
+    }
+
+    @Override
+    public void clean(Promise promise) throws IOException {
+        mUsbDeviceConnection.controlTransfer(0x21, 0x22, 0, 0, new byte[0], 0, 1000);
+        mUsbDeviceConnection.releaseInterface(mUsbInterface);
+        mUsbDeviceConnection.close();
+        ((ReactApplicationContext) mContext).unregisterReceiver(mUsbDeviceReceiver);
+
+        promise.resolve("success to clean");
     }
 
     @Override

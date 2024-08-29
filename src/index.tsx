@@ -69,3 +69,7 @@ export async function onPrintCut(
 ): Promise<string> {
   return UsbThermalPrinter.printCut(line, beep, id);
 }
+
+export async function onPrintClear(id: number): Promise<string> {
+  return UsbThermalPrinter.clean(id);
+}

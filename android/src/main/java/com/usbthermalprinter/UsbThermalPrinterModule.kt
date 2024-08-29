@@ -11,8 +11,6 @@ import com.usbthermalprinter.adapter.PrinterAdapter
 import com.usbthermalprinter.adapter.USBPrinterAdapter
 import com.usbthermalprinter.adapter.USBPrinterDeviceId
 
-// import java.lang.Exception
-
 class UsbThermalPrinterModule(reactContext: ReactApplicationContext) :
   ReactContextBaseJavaModule(reactContext) {
 
@@ -29,9 +27,9 @@ class UsbThermalPrinterModule(reactContext: ReactApplicationContext) :
   @ReactMethod
   fun getDeviceList(promise: Promise) {
     try{
-        val adapter: PrinterAdapter = USBPrinterAdapter()
         val pairedDeviceList:WritableArray = Arguments.createArray()
 
+        val adapter: PrinterAdapter = USBPrinterAdapter()
         val printerDevices = adapter.getDeviceList()
 
         if (printerDevices?.size!! > 0) {
@@ -42,37 +40,48 @@ class UsbThermalPrinterModule(reactContext: ReactApplicationContext) :
 
         promise.resolve(pairedDeviceList)
     } catch (e: Exception) {
-        promise.reject(e.message)
+        promise.reject("Erro ao buscar impressoras", e)
     }
   }
 
   @ReactMethod
   fun RawData(base64Data: String, id: Double,  promise: Promise) {
-    // adapter?.printRawData(base64Data, promise)
     try {
-       val adapter: PrinterAdapter = USBPrinterAdapter()
-       adapter.init(id.toInt(), context)
+        val adapter: PrinterAdapter = USBPrinterAdapter()
+        adapter.init(id.toInt(), context)
 
-        adapter.open()
+        val connect: Boolean=  adapter.open()
+
+        if(!connect){
+           promise.reject("Não foi possível se conectar com a impressora!")
+           adapter.close()
+           return
+        }
+
         adapter.printRawData(base64Data, promise)
-        adapter.close()
     } catch (e: Exception) {
-      promise.reject(e)
+      promise.reject("Erro ao imprimir", e)
     }
   }
 
   @ReactMethod
   fun printImageURL(imageUrl: String, imageWidth: Double, imageHeight: Double, id:Double, promise: Promise) {
-    // adapter?.printImageData(imageUrl, imageWidth.toInt(), imageHeight.toInt(), promise)
     try {
       val adapter: PrinterAdapter = USBPrinterAdapter()
       adapter.init(id.toInt(), context)
 
-      adapter.open()
+      val connect: Boolean=  adapter.open()
+
+      if(!connect){
+          promise.reject("Não foi possível se conectar com a impressora!")
+          adapter.close()
+          return
+      }
+
       adapter.printImageData(imageUrl, imageWidth.toInt(), imageHeight.toInt(), promise)
       adapter.close()
     } catch (e: Exception) {
-      promise.reject(e)
+       promise.reject("Erro ao imprimir", e)
     }
   }
 
@@ -85,11 +94,18 @@ class UsbThermalPrinterModule(reactContext: ReactApplicationContext) :
       val decodedString = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
       val decodedByte = android.graphics.BitmapFactory.decodeByteArray(decodedString, 0, decodedString.size)
 
-      adapter.open()
+      val connect: Boolean=  adapter.open()
+
+      if(!connect){
+          promise.reject("Não foi possível se conectar com a impressora!")
+          adapter.close()
+          return
+      }
+
       adapter.printImageBase64(decodedByte, imageWidth.toInt(), imageHeight.toInt(), promise)
       adapter.close()
     } catch (e: Exception) {
-      promise.reject(e)
+      promise.reject("Erro ao imprimir", e)
     }
   }
 
@@ -99,11 +115,32 @@ class UsbThermalPrinterModule(reactContext: ReactApplicationContext) :
       val adapter: PrinterAdapter = USBPrinterAdapter()
       adapter.init(id.toInt(), context)
 
-      adapter.open()
+      val connect: Boolean=  adapter.open()
+
+      if(!connect){
+          promise.reject("Não foi possível se conectar com a impressora!")
+          adapter.close()
+          return
+      }
+
       adapter.printCut(tailingLine, beep, promise)
       adapter.close()
     } catch (e: Exception) {
-      promise.reject(e)
+      promise.reject("Erro ao imprimir", e)
+    }
+  }
+
+  @ReactMethod
+  fun clean(id: Double,  promise: Promise) {
+    try {
+        val adapter: PrinterAdapter = USBPrinterAdapter()
+        adapter.init(id.toInt(), context)
+
+        adapter.open()
+
+        adapter.clean(promise)
+    } catch (e: Exception) {
+      promise.reject("Erro ao imprimir", e)
     }
   }
 }

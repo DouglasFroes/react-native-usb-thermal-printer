@@ -18,9 +18,11 @@ public interface PrinterAdapter {
 
     public List<PrinterDevice> getDeviceList() throws IOException;
 
-    public void open() throws IOException;
+    public Boolean open() throws IOException;
 
     public void close() throws IOException;
+
+     public void clean(Promise promise) throws IOException;
 
     public void printRawData(String rawBase64Data, Promise promise) throws IOException;
 
