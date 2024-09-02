@@ -30,6 +30,8 @@ class UsbThermalPrinterModule(reactContext: ReactApplicationContext) :
         val pairedDeviceList:WritableArray = Arguments.createArray()
 
         val adapter: PrinterAdapter = USBPrinterAdapter()
+        adapter.init(0, context)
+
         val printerDevices = adapter.getDeviceList()
 
         if (printerDevices?.size!! > 0) {

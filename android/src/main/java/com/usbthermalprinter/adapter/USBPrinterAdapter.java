@@ -97,13 +97,8 @@ public class USBPrinterAdapter implements PrinterAdapter {
     @Override
     public List<PrinterDevice> getDeviceList() throws IOException{
         List<PrinterDevice> lists = new ArrayList<>();
-        // if (mUSBManager == null) {
-        //     this.sendEvent("USBManager is not initialized while get device list");
-        //     return lists;
-        // }
-        ReactApplicationContext ctx = (ReactApplicationContext) mContext;
 
-          UsbManager manager = (UsbManager) ctx.getSystemService(Context.USB_SERVICE);
+        UsbManager manager = (UsbManager) mContext.getSystemService(Context.USB_SERVICE);
 
         for (UsbDevice usbDevice : manager.getDeviceList().values()) {
             lists.add(new USBPrinterDevice(usbDevice));
@@ -154,7 +149,7 @@ public class USBPrinterAdapter implements PrinterAdapter {
           e.printStackTrace();
           throw new IOException(e);
       }
-   }
+    }
 
     @Override
     public void close() throws IOException {
@@ -178,6 +173,7 @@ public class USBPrinterAdapter implements PrinterAdapter {
         try{
           byte[] command = Base64.decode(rawData, Base64.DEFAULT);
           int b = mUsbDeviceConnection.bulkTransfer(usbEndpointOut, command, 0, command.length, 1000);
+          // int b = mUsbDeviceConnection.controlTransfer(0x40, 0x03, 0x4138, 0, command, command.length, 1000);
 
           if (b < 0) {
               String msg = "failed to print raw data - " + b;
