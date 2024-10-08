@@ -31,4 +31,8 @@ public interface PrinterAdapter {
     public void printImageBase64(Bitmap imageUrl, int imageWidth, int imageHeight, Promise promise) throws IOException;
 
     public void printCut(boolean tailingLine, boolean beep, Promise promise) throws IOException;
+
+    public void barCode(String text, int width, int height, Promise promise) throws IOException;
+
+    public void qrCode(String text, int size,  Promise promise) throws IOException;
 }

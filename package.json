@@ -1,6 +1,6 @@
 {
   "name": "react-native-usb-thermal-printer",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "React Native module to print on USB thermal printers",
   "source": "./src/index.tsx",
   "main": "./lib/commonjs/index.js",
@@ -49,7 +49,7 @@
     "example": "yarn workspace react-native-usb-thermal-printer-example",
     "test": "jest",
     "typecheck": "tsc",
-    "lint": "eslint \"**/*.{js,ts,tsx}\"",
+    "lint": "eslint \"**/*.{js,ts,tsx}\" --fix",
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
     "prepare": "bob build",
     "release": "release-it"

@@ -35,6 +35,11 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.common.BitMatrix;
+import android.graphics.Matrix;
+
 public class USBPrinterAdapter implements PrinterAdapter {
     private final String LOG_TAG = "USBPrinterDSF";
 
@@ -340,6 +345,40 @@ public class USBPrinterAdapter implements PrinterAdapter {
         }
     }
 
+    @Override
+    public void qrCode(String text, int size,  Promise promise) throws IOException {
+        try {
+            mUsbDeviceConnection.bulkTransfer(usbEndpointOut, CENTER_ALIGN, 0, CENTER_ALIGN.length, 1000);
+            // Set QR code size (GS ( k)
+            byte[] setSize = new byte[]{0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, (byte) size};
+            mUsbDeviceConnection.bulkTransfer(usbEndpointOut, setSize, 0, setSize.length, 1000);
+
+            // Store QR code data (GS ( k)
+            byte[] storeDataHeader = new byte[]{0x1D, 0x28, 0x6B, (byte) (text.length() + 3), 0x00, 0x31, 0x50, 0x30};
+            mUsbDeviceConnection.bulkTransfer(usbEndpointOut, storeDataHeader, 0, storeDataHeader.length, 1000);
+            mUsbDeviceConnection.bulkTransfer(usbEndpointOut, text.getBytes(), 0, text.length(), 1000);
+
+            // Print the QR code (GS ( k)
+            byte[] printQrCode = new byte[]{0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30};
+            mUsbDeviceConnection.bulkTransfer(usbEndpointOut, printQrCode, 0, printQrCode.length, 1000);
+
+            mUsbDeviceConnection.bulkTransfer(usbEndpointOut, SET_LINE_SPACE_32, 0, SET_LINE_SPACE_32.length, 1000);
+            int b = mUsbDeviceConnection.bulkTransfer(usbEndpointOut, LINE_FEED, 0, LINE_FEED.length, 1000);
+
+            if (b < 0) {
+                String msg = "failed to print qr code";
+                Log.v(LOG_TAG, msg);
+                promise.reject(msg);
+            } else {
+                promise.resolve("success to print qr code");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            promise.reject(e.getMessage());
+            throw new IOException(e);
+        }
+    }
+
     private void sendEvent(String msg) {
       if (mContext != null) {
           ((ReactApplicationContext) mContext)
@@ -359,5 +398,98 @@ public class USBPrinterAdapter implements PrinterAdapter {
             Log.w(LOG_TAG, "HID interface not found.");
         }
         return null;
+    }
+
+    @Override
+    public void barCode(String text, int width, int height, Promise promise) throws IOException {
+      try {
+          Bitmap barcodeBitmap = generateBarcodeBitmap(text);
+
+          // 2. Rotacionar o Bitmap
+          Bitmap rotatedBitmap = rotateBitmap(barcodeBitmap);
+
+          // 3. Converter o Bitmap rotacionado em bytes
+          byte[] imageBytes = convertBitmapToBytes(rotatedBitmap);
+
+          // 4. Enviar os bytes para a impressora
+          int[][] pixels = getPixelsSlow(rotatedBitmap, width, height);
+
+          mUsbDeviceConnection.bulkTransfer(usbEndpointOut, SET_LINE_SPACE_24, 0, SET_LINE_SPACE_24.length, 1000);
+          mUsbDeviceConnection.bulkTransfer(usbEndpointOut, CENTER_ALIGN, 0, CENTER_ALIGN.length, 1000);
+
+          for (int y = 0; y < pixels.length; y += 24) {
+              mUsbDeviceConnection.bulkTransfer(usbEndpointOut, SELECT_BIT_IMAGE_MODE, 0, SELECT_BIT_IMAGE_MODE.length, 1000);
+
+              byte[] row = new byte[]{(byte) (0x00ff & pixels[y].length)
+                      , (byte) ((0xff00 & pixels[y].length) >> 8)};
+
+              mUsbDeviceConnection.bulkTransfer(usbEndpointOut, row, 0, row.length, 1000);
+
+              for (int x = 0; x < pixels[y].length; x++) {
+                  byte[] slice = recollectSlice(y, x, pixels);
+                  mUsbDeviceConnection.bulkTransfer(usbEndpointOut, slice, 0, slice.length, 1000);
+              }
+
+              mUsbDeviceConnection.bulkTransfer(usbEndpointOut, LINE_FEED, 0, LINE_FEED.length, 1000);
+          }
+
+          mUsbDeviceConnection.bulkTransfer(usbEndpointOut, SET_LINE_SPACE_32, 0, SET_LINE_SPACE_32.length, 1000);
+          int b = mUsbDeviceConnection.bulkTransfer(usbEndpointOut, LINE_FEED, 0, LINE_FEED.length, 1000);
+
+          if (b < 0) {
+              String msg = "failed to print barcode";
+              Log.v(LOG_TAG, msg);
+              promise.reject(msg);
+          } else {
+              promise.resolve("success to print barcode");
+          }
+      } catch (Exception e) {
+          e.printStackTrace();
+          promise.reject(e.getMessage());
+          throw new IOException(e);
+      }
+    }
+
+    private Bitmap generateBarcodeBitmap(String text) throws Exception {
+        BitMatrix bitMatrix = new MultiFormatWriter().encode(text, BarcodeFormat.CODE_128, 600, 300);
+        int width = bitMatrix.getWidth();
+        int height = bitMatrix.getHeight();
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565);
+
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                bitmap.setPixel(x, y, bitMatrix.get(x, y) ? 0xFF000000 : 0xFFFFFFFF);
+            }
+        }
+
+        return bitmap;
+    }
+
+    private Bitmap rotateBitmap(Bitmap bitmap) {
+        Matrix matrix = new Matrix();
+        matrix.postRotate(90);  // Rotaciona 90 graus no sentido horário
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+    }
+
+    public byte[] convertBitmapToBytes(Bitmap bitmap) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        byte[] imageBytes = new byte[width * height];
+        int k = 0;
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int pixel = bitmap.getPixel(x, y);
+                int red = (pixel >> 16) & 0xff;
+                int green = (pixel >> 8) & 0xff;
+                int blue = pixel & 0xff;
+
+                // Converta para escala de cinza
+                int gray = (red + green + blue) / 3;
+                imageBytes[k++] = (byte) (gray < 128 ? 1 : 0);  // Definir como 1 para preto e 0 para branco
+            }
+        }
+
+        return imageBytes;
     }
 }

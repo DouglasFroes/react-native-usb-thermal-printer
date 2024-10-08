@@ -73,3 +73,20 @@ export async function onPrintCut(
 export async function onPrintClear(id: number): Promise<string> {
   return UsbThermalPrinter.clean(id);
 }
+
+export function onPrintBarCode(
+  id: number,
+  w: number,
+  h: number,
+  text: string
+): Promise<string> {
+  return UsbThermalPrinter.barCode(text, w, h, id);
+}
+
+export function onPrintQRCode(
+  id: number,
+  text: string,
+  size: number = 6
+): Promise<string> {
+  return UsbThermalPrinter.qrCode(text, size, id);
+}

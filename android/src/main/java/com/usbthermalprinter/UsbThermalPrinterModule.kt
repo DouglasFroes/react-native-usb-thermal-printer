@@ -133,6 +133,48 @@ class UsbThermalPrinterModule(reactContext: ReactApplicationContext) :
   }
 
   @ReactMethod
+  fun barCode(text: String,  width: Double, height: Double, id: Double, promise: Promise) {
+    try {
+      val adapter: PrinterAdapter = USBPrinterAdapter()
+      adapter.init(id.toInt(), context)
+
+      val connect: Boolean=  adapter.open()
+
+      if(!connect){
+          promise.reject("Não foi possível se conectar com a impressora!")
+          adapter.close()
+          return
+      }
+
+      adapter.barCode(text, width.toInt(), height.toInt(), promise)
+      adapter.close()
+    } catch (e: Exception) {
+       promise.reject("Erro ao imprimir", e)
+    }
+  }
+
+  @ReactMethod
+  fun qrCode(text: String, size: Double, id:Double, promise: Promise) {
+    try {
+      val adapter: PrinterAdapter = USBPrinterAdapter()
+      adapter.init(id.toInt(), context)
+
+      val connect: Boolean=  adapter.open()
+
+      if(!connect){
+          promise.reject("Não foi possível se conectar com a impressora!")
+          adapter.close()
+          return
+      }
+
+      adapter.qrCode(text, size.toInt(), promise)
+      adapter.close()
+    } catch (e: Exception) {
+       promise.reject("Erro ao imprimir", e)
+    }
+  }
+
+  @ReactMethod
   fun clean(id: Double,  promise: Promise) {
     try {
         val adapter: PrinterAdapter = USBPrinterAdapter()
