@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import {
+  COMMANDS,
   onPrintCut,
   onPrintDeviceList,
   onPrintImageBase64,
@@ -16,7 +17,7 @@ import {
 
 import { height, width } from './dimensions';
 import { img64 } from './img64';
-import { COMMANDS, type IPrinter } from '../../src/utils';
+import type { IPrinter } from '../../src/utils/types';
 
 const BOLD_ON = COMMANDS.TEXT_FORMAT.TXT_BOLD_ON;
 const BOLD_OFF = COMMANDS.TEXT_FORMAT.TXT_BOLD_OFF;

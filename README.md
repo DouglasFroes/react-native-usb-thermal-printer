@@ -51,7 +51,7 @@ Recupera uma lista de impressoras USB disponíveis.
 
 Imprime texto na impressora especificada.
 
-- `id: number`: Identificador da impressora.
+- `id: number`: Identificador da impressora (product_id).
 - `text: string`: Texto a ser impresso.
 - `opts: PrinterOptions`: Configuração opcional para impressão.
 
@@ -63,7 +63,7 @@ Imprime texto na impressora especificada.
 
 Imprime uma imagem a partir de uma URL.
 
-- `id: number`: Identificador da impressora.
+- `id: number`: Identificador da impressora (product_id).
 - `imageUrl: string`: URL da imagem a ser impressa.
 - `opts: PrinterImageOptions`: Configuração opcional para impressão.
 
@@ -75,7 +75,7 @@ Imprime uma imagem a partir de uma URL.
 
 Imprime uma imagem a partir de uma string codificada em Base64.
 
-- `id: number`: Identificador da impressora.
+- `id: number`: Identificador da impressora (product_id).
 - `base64: string`: Dados da imagem codificados em Base64.
 - `opts: PrinterImageOptions`: Configuração opcional para impressão.
 
@@ -87,7 +87,7 @@ Imprime uma imagem a partir de uma string codificada em Base64.
 
 Corta o papel na impressora especificada.
 
-- `id: number`: Identificador da impressora.
+- `id: number`: Identificador da impressora (product_id).
 - `line: boolean`: Indica se deve incluir uma linha final.
 - `beep: boolean`: Determina se um som de beep é emitido durante o corte.
 
@@ -99,7 +99,7 @@ Corta o papel na impressora especificada.
 
 Limpa a fila de impressão.
 
-- `id: number`: Identificador da impressora.
+- `id: number`: Identificador da impressora (product_id).
 
 **Retorna:**
 
@@ -109,7 +109,7 @@ Limpa a fila de impressão.
 
 Imprime um código de barras.
 
-- `id: number`: Identificador da impressora.
+- `id: number`: Identificador da impressora (product_id).
 - `w: number`: Largura do código de barras.
 - `h: number`: Altura do código de barras.
 - `text: string`: Dados para o código de barras.
@@ -122,7 +122,7 @@ Imprime um código de barras.
 
 Imprime um QR code.
 
-- `id: number`: Identificador da impressora.
+- `id: number`: Identificador da impressora (product_id).
 - `text: string`: Dados para o QR code.
 - `size: number`: Tamanho do QR code.
 

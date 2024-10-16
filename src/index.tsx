@@ -1,6 +1,11 @@
 import { NativeModules, Platform } from 'react-native';
-import type { IPrinter, PrinterImageOptions, PrinterOptions } from './utils';
+import { COMMANDS } from './utils/commands';
 import { textTo64Buffer } from './utils/to64Buffer';
+import type {
+  IPrinter,
+  PrinterOptions,
+  PrinterImageOptions,
+} from './utils/types';
 
 const LINKING_ERROR =
   `The package 'react-native-usb-thermal-printer' doesn't seem to be linked. Make sure: \n\n` +
@@ -90,3 +95,6 @@ export function onPrintQRCode(
 ): Promise<string> {
   return UsbThermalPrinter.qrCode(text, size, id);
 }
+
+export { COMMANDS };
+export type { IPrinter, PrinterOptions, PrinterImageOptions };
